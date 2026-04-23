@@ -1,0 +1,1360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>PageTurn — Book Reading Reminder</title>
+  <meta name="description" content="Never lose your place again. PageTurn reminds you to continue reading at smart, randomized intervals." />
+
+  <!-- PWA / Install -->
+  <link rel="manifest" href="./manifest.json" />
+  <meta name="theme-color" content="#7c6af7" />
+
+  <!-- iOS PWA -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="PageTurn" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+  <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png" />
+
+  <!-- Android / MS -->
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="msapplication-TileColor" content="#7c6af7" />
+  <meta name="msapplication-TileImage" content="./icons/icon-144.png" />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0d0d14;
+      --surface: #14141f;
+      --card:    #1a1a2a;
+      --border:  #2a2a3d;
+      --accent:  #7c6af7;
+      --accent2: #c084fc;
+      --gold:    #f59e0b;
+      --text:    #e8e8f0;
+      --muted:   #888899;
+      --success: #34d399;
+      --danger:  #f87171;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bot: env(safe-area-inset-bottom, 0px);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      min-height: 100dvh;
+      overflow-x: hidden;
+      -webkit-tap-highlight-color: transparent;
+      padding-top: var(--safe-top);
+      padding-bottom: var(--safe-bot);
+    }
+
+    /* ── Stars background ── */
+    .stars {
+      position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      background:
+        radial-gradient(ellipse 80% 40% at 50% 0%, #1e0a4022 0%, transparent 60%),
+        radial-gradient(ellipse 60% 30% at 80% 100%, #0a0a2a44 0%, transparent 60%);
+    }
+    .stars::before {
+      content: '';
+      position: absolute; inset: 0;
+      background-image:
+        radial-gradient(1px 1px at 20% 30%, #ffffff33 0%, transparent 100%),
+        radial-gradient(1px 1px at 60% 10%, #ffffff22 0%, transparent 100%),
+        radial-gradient(1px 1px at 85% 50%, #ffffff1a 0%, transparent 100%),
+        radial-gradient(1px 1px at 40% 80%, #ffffff2a 0%, transparent 100%),
+        radial-gradient(1px 1px at 10% 60%, #ffffff1a 0%, transparent 100%),
+        radial-gradient(1px 1px at 70% 70%, #ffffff22 0%, transparent 100%);
+    }
+
+    /* ── Install Banner ── */
+    #install-banner {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 10000;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff;
+      display: flex; align-items: center; gap: .75rem;
+      padding: .9rem 1.2rem;
+      padding-top: calc(.9rem + var(--safe-top));
+      transform: translateY(-110%);
+      transition: transform .4s cubic-bezier(.34,1.56,.64,1);
+      box-shadow: 0 4px 24px #7c6af755;
+    }
+    #install-banner.show { transform: translateY(0); }
+    #install-banner .ib-icon { font-size: 1.5rem; flex-shrink: 0; }
+    #install-banner .ib-text { flex: 1; }
+    #install-banner .ib-title { font-weight: 600; font-size: .95rem; }
+    #install-banner .ib-sub   { font-size: .78rem; opacity: .85; margin-top: .1rem; }
+    #install-banner .ib-btn {
+      background: #fff; color: var(--accent);
+      border: none; border-radius: 8px;
+      padding: .45rem .9rem; font-weight: 700; font-size: .85rem;
+      cursor: pointer; flex-shrink: 0; white-space: nowrap;
+    }
+    #install-banner .ib-dismiss {
+      background: transparent; border: none; color: #ffffffbb;
+      font-size: 1.1rem; cursor: pointer; padding: .2rem; flex-shrink: 0;
+    }
+
+    /* ── Notification permission bar (top) ── */
+    #notif-permission-bar {
+      display: none;
+      background: #f59e0b22;
+      border-bottom: 1px solid #f59e0b44;
+      padding: .75rem 1.2rem;
+      text-align: center;
+      font-size: .85rem;
+      color: var(--gold);
+      align-items: center;
+      gap: .6rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    #notif-permission-bar.show { display: flex; }
+    #notif-permission-bar button {
+      background: var(--gold); color: #000;
+      border: none; border-radius: 6px;
+      padding: .35rem .8rem; font-weight: 700; font-size: .8rem;
+      cursor: pointer;
+    }
+
+    /* ── Layout ── */
+    .container {
+      position: relative; z-index: 1;
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 1.5rem 1.25rem 5rem;
+    }
+
+    /* ── Header ── */
+    header { text-align: center; padding: 2rem 0 1.75rem; }
+    .logo {
+      display: inline-flex; align-items: center; gap: .55rem;
+      margin-bottom: .85rem;
+    }
+    .logo-icon {
+      font-size: 2rem;
+      filter: drop-shadow(0 0 12px #7c6af799);
+      animation: float 3s ease-in-out infinite;
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50%       { transform: translateY(-6px); }
+    }
+    .logo-text {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.85rem; font-weight: 700;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    header p { color: var(--muted); font-size: .9rem; font-weight: 300; letter-spacing: .02em; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 1.4rem 1.5rem;
+      margin-bottom: 1.1rem;
+      box-shadow: 0 4px 40px #0008;
+      transition: border-color .25s;
+    }
+    .card-header {
+      display: flex; align-items: center; gap: .6rem;
+      margin-bottom: 1.2rem;
+    }
+    .card-icon { font-size: 1.15rem; }
+    .card-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.05rem; font-weight: 600; color: var(--text);
+    }
+
+    /* ── Form elements ── */
+    label {
+      display: block;
+      font-size: .78rem; font-weight: 500;
+      color: var(--muted);
+      letter-spacing: .05em; text-transform: uppercase;
+      margin-bottom: .4rem;
+    }
+    input[type="text"], input[type="number"], select {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: .8rem 1rem;
+      color: var(--text);
+      font-size: 1rem;           /* prevents iOS zoom-in on focus */
+      font-family: 'Inter', sans-serif;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    input:focus, select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px #7c6af722;
+    }
+    select option { background: var(--card); }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .form-group { margin-bottom: 1rem; }
+    .form-group:last-child { margin-bottom: 0; }
+
+    .interval-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: .75rem;
+    }
+    .interval-hint {
+      margin-top: .6rem; font-size: .78rem; color: var(--muted);
+      display: flex; align-items: center; gap: .35rem;
+    }
+
+    /* ── App List ── */
+    .app-list { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; margin-top: .75rem; }
+    .app-item {
+      display: flex; align-items: center; gap: .6rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: .85rem 1rem;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: .9rem; transition: border-color .2s;
+    }
+    .app-item:hover { border-color: var(--accent); }
+    .app-item input { accent-color: var(--accent); cursor: pointer; width: 1.15rem; height: 1.15rem; }
+
+
+    /* ── Toggle switch ── */
+    .toggle-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .55rem 0;
+    }
+    .toggle-label { font-size: .9rem; font-weight: 500; color: var(--text); }
+    .toggle-sub   { font-size: .77rem; color: var(--muted); margin-top: .15rem; }
+    .switch { position: relative; width: 48px; height: 28px; flex-shrink: 0; }
+    .switch input { display: none; }
+    .slider {
+      position: absolute; inset: 0;
+      background: var(--border);
+      border-radius: 50px; cursor: pointer;
+      transition: background .3s;
+    }
+    .slider::before {
+      content: '';
+      position: absolute;
+      width: 22px; height: 22px;
+      left: 3px; top: 3px;
+      background: #fff; border-radius: 50%;
+      transition: transform .3s;
+    }
+    .switch input:checked + .slider { background: var(--accent); }
+    .switch input:checked + .slider::before { transform: translateX(20px); }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: .5rem;
+      padding: .85rem 1.5rem;
+      border-radius: 14px; border: none;
+      font-family: 'Inter', sans-serif;
+      font-size: .95rem; font-weight: 600;
+      cursor: pointer; transition: all .2s;
+      text-decoration: none;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      min-height: 48px; /* recommended touch target */
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff; box-shadow: 0 4px 20px #7c6af755;
+    }
+    .btn-primary:hover, .btn-primary:active {
+      transform: translateY(-2px); box-shadow: 0 6px 28px #7c6af788;
+    }
+    .btn-danger {
+      background: #f8717122; color: var(--danger);
+      border: 1px solid #f8717144;
+    }
+    .btn-danger:hover  { background: #f8717133; }
+    .btn-ghost {
+      background: var(--surface); color: var(--muted);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--text); }
+    .btn-row { display: flex; gap: .75rem; flex-wrap: wrap; margin-top: 1.2rem; }
+
+    /* ── Status pill ── */
+    .status-pill {
+      display: inline-flex; align-items: center; gap: .45rem;
+      padding: .35rem .85rem; border-radius: 50px;
+      font-size: .8rem; font-weight: 600; letter-spacing: .04em;
+    }
+    .status-pill.active  { background: #34d39922; color: var(--success); border: 1px solid #34d39944; }
+    .status-pill.inactive{ background: #88889922; color: var(--muted);   border: 1px solid var(--border); }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .dot.pulse { animation: pulse 1.5s ease-in-out infinite; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: .5; transform: scale(.8); }
+    }
+
+    /* ── Countdown ── */
+    .countdown-block { text-align: center; padding: 1.2rem 0 .4rem; }
+    .countdown-label { font-size: .78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: .5rem; }
+    .countdown-value {
+      font-family: 'Playfair Display', serif;
+      font-size: 2.8rem; font-weight: 700;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text; line-height: 1;
+    }
+    .countdown-sub { font-size: .8rem; color: var(--muted); margin-top: .4rem; }
+
+    /* ── History list ── */
+    .history-list {
+      list-style: none; display: flex; flex-direction: column; gap: .6rem;
+      max-height: 220px; overflow-y: auto; padding-right: .25rem;
+    }
+    .history-list::-webkit-scrollbar { width: 4px; }
+    .history-list::-webkit-scrollbar-track { background: transparent; }
+    .history-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+    .history-item {
+      display: flex; align-items: center; gap: .75rem;
+      padding: .7rem .9rem;
+      background: var(--surface); border-radius: 10px;
+      border: 1px solid var(--border); font-size: .83rem;
+    }
+    .history-item .hi-icon { font-size: 1rem; }
+    .history-item .hi-text { flex: 1; color: var(--text); }
+    .history-item .hi-time { color: var(--muted); font-size: .75rem; }
+    .empty-state { text-align: center; padding: 1.5rem 0; color: var(--muted); font-size: .85rem; }
+    .empty-state span { display: block; font-size: 1.8rem; margin-bottom: .4rem; }
+
+    /* ── POPUP OVERLAY ── */
+    #popup-overlay {
+      position: fixed; inset: 0; z-index: 9999;
+      display: flex; align-items: center; justify-content: center;
+      background: #000000aa;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      opacity: 0; pointer-events: none;
+      transition: opacity .35s;
+      padding: 1.25rem;
+      padding-bottom: calc(1.25rem + var(--safe-bot));
+    }
+    #popup-overlay.visible { opacity: 1; pointer-events: all; }
+    .popup {
+      background: linear-gradient(145deg, #1e1e32, #14142a);
+      border: 1px solid var(--border);
+      border-radius: 26px;
+      padding: 2.2rem 2rem;
+      max-width: 420px; width: 100%;
+      box-shadow: 0 20px 80px #00000088, 0 0 0 1px #7c6af722;
+      text-align: center;
+      transform: scale(.88) translateY(20px);
+      transition: transform .35s cubic-bezier(.34,1.56,.64,1);
+      position: relative;
+    }
+    #popup-overlay.visible .popup { transform: scale(1) translateY(0); }
+
+    .popup-book-icon {
+      font-size: 3.5rem; display: block; margin-bottom: .9rem;
+      animation: bookWiggle 2s ease-in-out infinite;
+    }
+    @keyframes bookWiggle {
+      0%, 100% { transform: rotate(-3deg); }
+      50%       { transform: rotate(3deg); }
+    }
+    .popup-eyebrow  { font-size: .75rem; text-transform: uppercase; letter-spacing: .1em; color: var(--accent2); font-weight: 600; margin-bottom: .45rem; }
+    .popup-title    { font-family: 'Playfair Display', serif; font-size: 1.5rem; font-weight: 700; color: var(--text); margin-bottom: .45rem; line-height: 1.3; }
+    .popup-book-name{ font-size: .95rem; color: var(--accent); font-weight: 500; margin-bottom: .35rem; }
+    .popup-page     { font-size: .83rem; color: var(--muted); margin-bottom: 1.4rem; }
+    .popup-preview  { display: flex; text-align: left; background: var(--bg); padding: .8rem; border-radius: 12px; margin-bottom: 1.25rem; font-size: .8rem; color: var(--text); gap: .75rem; opacity: .9; align-items: flex-start; max-height: 130px; overflow-y: auto; line-height: 1.4; border: 1px solid var(--border); box-shadow: inset 0 2px 10px #0004; }
+    .popup-preview img { width: 55px; height: 80px; object-fit: cover; border-radius: 6px; flex-shrink: 0; box-shadow: 0 4px 10px #0006; }
+    .popup-preview::-webkit-scrollbar { width: 4px; }
+    .popup-preview::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+    .popup-progress { width: 100%; height: 5px; background: var(--border); border-radius: 99px; margin-bottom: 1.5rem; overflow: hidden; }
+    .popup-progress-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .6s ease; }
+    .popup-actions  { display: flex; gap: .75rem; justify-content: center; flex-wrap: wrap; }
+
+    .popup-btn-read {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff; border: none; border-radius: 14px;
+      padding: .85rem 1.6rem;
+      font-family: 'Inter', sans-serif; font-size: .95rem; font-weight: 600;
+      cursor: pointer; box-shadow: 0 4px 20px #7c6af755;
+      transition: all .2s; min-height: 48px;
+    }
+    .popup-btn-read:hover { transform: translateY(-2px); box-shadow: 0 6px 28px #7c6af788; }
+    .popup-btn-snooze {
+      background: transparent; color: var(--muted);
+      border: 1px solid var(--border); border-radius: 14px;
+      padding: .85rem 1.2rem;
+      font-family: 'Inter', sans-serif; font-size: .85rem; font-weight: 500;
+      cursor: pointer; transition: all .2s; min-height: 48px;
+    }
+    .popup-btn-snooze:hover { border-color: var(--accent); color: var(--text); }
+    .popup-close {
+      position: absolute; top: 1rem; right: 1rem;
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--muted); font-size: 1rem;
+      cursor: pointer; padding: .4rem .55rem; border-radius: 8px;
+      transition: color .2s;
+      min-width: 36px; min-height: 36px;
+    }
+    .popup-close:hover { color: var(--text); }
+
+    /* ── Quote card ── */
+    .quote-card {
+      background: linear-gradient(135deg, #1a1230, #1a1a2a);
+      border: 1px solid #7c6af733; border-radius: 16px;
+      padding: 1.2rem 1.4rem; margin-bottom: 1.1rem;
+    }
+    .quote-text {
+      font-family: 'Playfair Display', serif; font-style: italic;
+      font-size: .92rem; color: var(--accent2); line-height: 1.55;
+    }
+    .quote-attr { font-size: .75rem; color: var(--muted); margin-top: .5rem; }
+
+    /* ── Notification toast bar ── */
+    #notif-bar {
+      position: fixed; bottom: calc(1.2rem + var(--safe-bot)); left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: .7rem 1.25rem;
+      font-size: .85rem;
+      display: flex; align-items: center; gap: .5rem;
+      box-shadow: 0 8px 30px #00000055;
+      z-index: 8000;
+      opacity: 0; pointer-events: none;
+      transition: opacity .3s, transform .3s;
+      white-space: nowrap;
+      max-width: calc(100vw - 2rem);
+    }
+    #notif-bar.show {
+      opacity: 1; pointer-events: all;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 480px) {
+      .form-row, .interval-grid { grid-template-columns: 1fr; }
+      .popup { padding: 1.8rem 1.4rem; }
+      .popup-title { font-size: 1.3rem; }
+      .countdown-value { font-size: 2.2rem; }
+      .btn-row { flex-direction: column; }
+      .btn-row .btn { justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+<div class="stars"></div>
+
+<!-- Install Banner -->
+<div id="install-banner">
+  <span class="ib-icon">📚</span>
+  <div class="ib-text">
+    <div class="ib-title">Install PageTurn</div>
+    <div class="ib-sub">Add to home screen for offline & background reminders</div>
+  </div>
+  <button class="ib-btn" id="install-btn">Install</button>
+  <button class="ib-dismiss" id="install-dismiss" aria-label="Dismiss">✕</button>
+</div>
+
+<!-- Notification permission bar -->
+<div id="notif-permission-bar">
+  <span>🔔 Allow notifications so reminders work when the screen is off</span>
+  <button id="allow-notif-btn">Allow</button>
+</div>
+
+<!-- Notification toast -->
+<div id="notif-bar">
+  <span id="notif-icon">📖</span>
+  <span id="notif-text">Reminder set!</span>
+</div>
+
+<!-- Pop-up overlay -->
+<div id="popup-overlay" role="dialog" aria-modal="true" aria-label="Reading Reminder">
+  <div class="popup">
+    <button class="popup-close" id="popup-close-btn" title="Dismiss" aria-label="Close">✕</button>
+    <span class="popup-book-icon">📖</span>
+    <p class="popup-eyebrow" id="popup-eyebrow">Time to Read ✦</p>
+    <h2 class="popup-title" id="popup-title">Continue where you left off!</h2>
+    <p class="popup-book-name" id="popup-book-name">—</p>
+    <p class="popup-page" id="popup-page">Page — of —</p>
+    
+    <div class="popup-preview" id="popup-preview-area" style="display:none;">
+      <img id="popup-preview-img" src="" alt="Book Cover" />
+      <div id="popup-preview-desc"></div>
+    </div>
+
+    <div class="popup-progress">
+      <div class="popup-progress-fill" id="popup-bar" style="width:0%"></div>
+    </div>
+    <div class="popup-actions">
+      <button class="popup-btn-read"   id="popup-start-btn">Start Reading 📚</button>
+      <button class="popup-btn-snooze" id="popup-snooze-btn">Snooze 15 min 💤</button>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <header>
+    <div class="logo">
+      <span class="logo-icon">📚</span>
+      <span class="logo-text">PageTurn</span>
+    </div>
+    <p>Smart reminders so you never lose your place again</p>
+  </header>
+
+  <!-- Quote -->
+  <div class="quote-card">
+    <p class="quote-text" id="daily-quote">"A reader lives a thousand lives before he dies."</p>
+    <p class="quote-attr" id="daily-attr">— George R.R. Martin</p>
+  </div>
+
+  <!-- Book info -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-icon">🔖</span>
+      <span class="card-title">Your Current Book</span>
+    </div>
+    <div class="form-group">
+      <label for="book-title">Book Title</label>
+      <input type="text" id="book-title" placeholder="e.g. Atomic Habits" autocomplete="off" />
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="current-page">Current Page</label>
+        <input type="number" id="current-page" inputmode="numeric" min="1" value="1" />
+      </div>
+      <div class="form-group">
+        <label for="total-pages">Total Pages</label>
+        <input type="number" id="total-pages" inputmode="numeric" min="1" value="300" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label for="book-author">Author (optional)</label>
+      <input type="text" id="book-author" placeholder="e.g. James Clear" autocomplete="off" />
+    </div>
+  </div>
+
+  <!-- Reminder settings -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-icon">⏰</span>
+      <span class="card-title">Reminder Intervals</span>
+    </div>
+    <div class="interval-grid">
+      <div class="form-group">
+        <label for="min-interval">Every (minimum)</label>
+        <input type="number" id="min-interval" inputmode="numeric" min="1" value="30" />
+      </div>
+      <div class="form-group">
+        <label for="max-interval">Up to (maximum)</label>
+        <input type="number" id="max-interval" inputmode="numeric" min="1" value="90" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label for="interval-unit">Unit</label>
+      <select id="interval-unit">
+        <option value="60">Minutes</option>
+        <option value="3600">Hours</option>
+      </select>
+    </div>
+    <p class="interval-hint">
+      <span>✦</span>
+      Reminders fire at a <strong>random time</strong> between min and max — keeps it natural!
+    </p>
+
+    <hr style="border:none; border-top:1px solid var(--border); margin: 1.2rem 0;" />
+
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">Browser / Push Notifications</div>
+        <div class="toggle-sub">Fires even when screen is off (Android) or tab hidden</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="notif-toggle" />
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="toggle-row" style="margin-top:.5rem;">
+      <div>
+        <div class="toggle-label">Sound Alert</div>
+        <div class="toggle-sub">Play a gentle chime with each reminder</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="sound-toggle" checked />
+        <span class="slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Distraction Tracker -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-icon">📱</span>
+      <span class="card-title">Distraction Tracker</span>
+    </div>
+    <p style="font-size: .85rem; color: var(--muted); margin-bottom: .8rem; line-height: 1.5;">
+      Select apps you want to limit. When you spend too much time on them, we'll prompt you to read instead!
+    </p>
+    <div class="app-list">
+      <label class="app-item"><input type="checkbox" class="distract-app" value="Facebook"> Facebook</label>
+      <label class="app-item"><input type="checkbox" class="distract-app" value="Instagram"> Instagram</label>
+      <label class="app-item"><input type="checkbox" class="distract-app" value="TikTok"> TikTok</label>
+      <label class="app-item"><input type="checkbox" class="distract-app" value="YouTube"> YouTube</label>
+      <label class="app-item"><input type="checkbox" class="distract-app" value="X (Twitter)"> X (Twitter)</label>
+      <label class="app-item"><input type="checkbox" class="distract-app" value="Reddit"> Reddit</label>
+    </div>
+  </div>
+
+  <!-- Order Notification Setup -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-icon">🛍️</span>
+      <span class="card-title">Order Alerts</span>
+    </div>
+    <p style="font-size: .85rem; color: var(--muted); margin-bottom: .8rem; line-height: 1.5;">
+      Enable this to receive instant alerts on your phone whenever a new order is taken in your store.
+    </p>
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">Order Notifications</div>
+        <div class="toggle-sub">Link this device to your store API</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="order-notif-toggle" />
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div id="order-api-info" style="display:none; margin-top: 1rem; padding: 1rem; background: var(--surface); border-radius: 12px; border: 1px solid var(--border);">
+      <label>Your Trigger API Endpoint</label>
+      <div style="display:flex; gap: .5rem;">
+        <input type="text" id="order-api-url" readonly value="http://localhost:3000/trigger-order-alert" style="font-size: .8rem;" />
+        <button class="btn btn-ghost" style="min-height:38px; padding: 0 .8rem;" onclick="copyApiUrl()">Copy</button>
+      </div>
+      <p style="font-size: .7rem; color: var(--muted); margin-top: .5rem;">
+        POST to this URL from your store backend to alert this phone.
+      </p>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-icon">🎛️</span>
+      <span class="card-title">Controls</span>
+      <span id="status-pill" class="status-pill inactive" style="margin-left:auto;">
+        <span class="dot"></span> Inactive
+      </span>
+    </div>
+
+    <div class="countdown-block" id="countdown-block" style="display:none;">
+      <p class="countdown-label">Next reminder in</p>
+      <p class="countdown-value" id="countdown-value">--:--</p>
+      <p class="countdown-sub" id="countdown-sub">Keep up the great reading habit! 🌟</p>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="start-btn">▶ Start Reminders</button>
+      <button class="btn btn-danger"  id="stop-btn"  style="display:none;">⏹ Stop</button>
+      <button class="btn btn-ghost"   id="test-btn">⚡ Test Popup</button>
+    </div>
+  </div>
+
+  <!-- History -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-icon">📋</span>
+      <span class="card-title">Reminder History</span>
+      <button class="btn btn-ghost" id="clear-history-btn"
+        style="margin-left:auto; padding:.35rem .85rem; font-size:.78rem; min-height:36px;">
+        Clear
+      </button>
+    </div>
+    <ul class="history-list" id="history-list">
+      <li class="empty-state"><span>📭</span>No reminders yet — start your reading session!</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════
+   STATE
+   ═══════════════════════════════════════════════════════ */
+const state = {
+  running: false,
+  timer: null,
+  countdownInterval: null,
+  nextFireAt: null,
+  swReady: false,
+  swReg: null,
+  history: JSON.parse(localStorage.getItem('pt_history') || '[]'),
+  bookPreview: null,
+};
+
+/* ═══════════════════════════════════════════════════════
+   SERVICE WORKER REGISTRATION
+   ═══════════════════════════════════════════════════════ */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js')
+    .then((reg) => {
+      state.swReg = reg;
+      state.swReady = true;
+      console.log('[PageTurn] SW registered', reg.scope);
+    })
+    .catch((err) => console.warn('[PageTurn] SW failed:', err));
+
+  /* Listen for messages from SW (fire in-page popup) */
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    const { type, action } = e.data || {};
+    if (type === 'FIRE_IN_PAGE') {
+      fireReminder();
+    }
+    if (type === 'NOTIF_ACTION') {
+      if (action === 'snooze') doSnooze();
+      else closePopup();
+    }
+  });
+}
+
+/* ═══════════════════════════════════════════════════════
+   INSTALL (PWA Add-to-Home-Screen)
+   ═══════════════════════════════════════════════════════ */
+let deferredPrompt = null;
+const installBanner  = document.getElementById('install-banner');
+const installBtn     = document.getElementById('install-btn');
+const installDismiss = document.getElementById('install-dismiss');
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  if (!localStorage.getItem('pt_install_dismissed')) {
+    installBanner.classList.add('show');
+  }
+});
+
+installBtn.addEventListener('click', async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;
+  if (outcome === 'accepted') {
+    showToast('🎉', 'PageTurn installed! Find it on your home screen.');
+  }
+  deferredPrompt = null;
+  installBanner.classList.remove('show');
+});
+
+installDismiss.addEventListener('click', () => {
+  installBanner.classList.remove('show');
+  localStorage.setItem('pt_install_dismissed', '1');
+});
+
+window.addEventListener('appinstalled', () => {
+  installBanner.classList.remove('show');
+  showToast('✅', 'App installed successfully!');
+});
+
+/* ═══════════════════════════════════════════════════════
+   NOTIFICATION PERMISSION
+   ═══════════════════════════════════════════════════════ */
+const permBar  = document.getElementById('notif-permission-bar');
+const allowBtn = document.getElementById('allow-notif-btn');
+
+function checkNotifPermission() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'default') {
+    permBar.classList.add('show');
+  }
+}
+
+allowBtn.addEventListener('click', async () => {
+  const result = await Notification.requestPermission();
+  permBar.classList.remove('show');
+  if (result === 'granted') {
+    document.getElementById('notif-toggle').checked = true;
+    savePrefs();
+    showToast('🔔', 'Notifications enabled — reminders will reach you anywhere!');
+  } else {
+    showToast('⚠️', 'Notifications blocked. In-app popups will still show.');
+  }
+});
+
+document.getElementById('notif-toggle').addEventListener('change', async (e) => {
+  if (e.target.checked) {
+    if (Notification.permission === 'default') {
+      const res = await Notification.requestPermission();
+      if (res !== 'granted') {
+        e.target.checked = false;
+        showToast('⚠️', 'Browser notifications were denied.');
+        return;
+      }
+    }
+    if (Notification.permission === 'denied') {
+      e.target.checked = false;
+      showToast('⚠️', 'Notifications blocked — check your browser/OS settings.');
+      return;
+    }
+    permBar.classList.remove('show');
+    showToast('🔔', 'Notifications enabled!');
+  }
+});
+
+/* ═══════════════════════════════════════════════════════
+   QUOTES
+   ═══════════════════════════════════════════════════════ */
+const quotes = [
+  { text: "A reader lives a thousand lives before he dies. The man who never reads lives only one.", attr: "George R.R. Martin" },
+  { text: "Not all those who wander are lost.", attr: "J.R.R. Tolkien" },
+  { text: "So many books, so little time.", attr: "Frank Zappa" },
+  { text: "One must always be careful of books, and what is inside them, for words have the power to change us.", attr: "Cassandra Clare" },
+  { text: "I declare after all there is no enjoyment like reading!", attr: "Jane Austen" },
+  { text: "Until I feared I would lose it, I never loved to read. One does not love breathing.", attr: "Harper Lee" },
+  { text: "Books are a uniquely portable magic.", attr: "Stephen King" },
+  { text: "Reading is to the mind what exercise is to the body.", attr: "Joseph Addison" },
+];
+
+function loadQuote() {
+  const q = quotes[Math.floor(Math.random() * quotes.length)];
+  document.getElementById('daily-quote').textContent = `"${q.text}"`;
+  document.getElementById('daily-attr').textContent  = `— ${q.attr}`;
+}
+
+/* ═══════════════════════════════════════════════════════
+   PERSIST & RESTORE
+   ═══════════════════════════════════════════════════════ */
+function savePrefs() {
+  const p = {
+    bookTitle:   document.getElementById('book-title').value,
+    bookAuthor:  document.getElementById('book-author').value,
+    currentPage: document.getElementById('current-page').value,
+    totalPages:  document.getElementById('total-pages').value,
+    minInterval: document.getElementById('min-interval').value,
+    maxInterval: document.getElementById('max-interval').value,
+    unit:        document.getElementById('interval-unit').value,
+    sound:       document.getElementById('sound-toggle').checked,
+    notif:       document.getElementById('notif-toggle').checked,
+    apps:        Array.from(document.querySelectorAll('.distract-app:checked')).map(el => el.value),
+  };
+  localStorage.setItem('pt_prefs', JSON.stringify(p));
+}
+
+function loadPrefs() {
+  const p = JSON.parse(localStorage.getItem('pt_prefs') || '{}');
+  if (p.bookTitle)   document.getElementById('book-title').value    = p.bookTitle;
+  if (p.bookAuthor)  document.getElementById('book-author').value   = p.bookAuthor;
+  if (p.currentPage) document.getElementById('current-page').value  = p.currentPage;
+  if (p.totalPages)  document.getElementById('total-pages').value   = p.totalPages;
+  if (p.minInterval) document.getElementById('min-interval').value  = p.minInterval;
+  if (p.maxInterval) document.getElementById('max-interval').value  = p.maxInterval;
+  if (p.unit)        document.getElementById('interval-unit').value = p.unit;
+  if (p.sound !== undefined) document.getElementById('sound-toggle').checked = p.sound;
+  if (p.notif !== undefined) document.getElementById('notif-toggle').checked = p.notif;
+  
+  if (p.apps && p.apps.length > 0) {
+    document.querySelectorAll('.distract-app').forEach(el => {
+      if (p.apps.includes(el.value)) el.checked = true;
+    });
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   PREVIEW BOOK (Google Books API)
+   ═══════════════════════════════════════════════════════ */
+async function fetchBookPreview() {
+  const title = document.getElementById('book-title').value.trim();
+  if (!title) { state.bookPreview = null; return; }
+  try {
+    const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(title)}&maxResults=1`);
+    const data = await res.json();
+    if (data.items && data.items.length > 0 && data.items[0].volumeInfo) {
+      state.bookPreview = data.items[0].volumeInfo;
+    } else {
+      state.bookPreview = null;
+    }
+  } catch(e) {
+    console.warn("Book API error:", e);
+    state.bookPreview = null;
+  }
+}
+document.getElementById('book-title').addEventListener('blur', fetchBookPreview);
+
+
+/* ═══════════════════════════════════════════════════════
+   COUNTDOWN
+   ═══════════════════════════════════════════════════════ */
+function startCountdown() {
+  clearInterval(state.countdownInterval);
+  const cd    = document.getElementById('countdown-value');
+  const block = document.getElementById('countdown-block');
+  block.style.display = 'block';
+  state.countdownInterval = setInterval(() => {
+    const remaining = state.nextFireAt - Date.now();
+    if (remaining <= 0) { cd.textContent = '00:00'; clearInterval(state.countdownInterval); return; }
+    const h = Math.floor(remaining / 3600000);
+    const m = Math.floor((remaining % 3600000) / 60000);
+    const s = Math.floor((remaining % 60000) / 1000);
+    cd.textContent = h > 0
+      ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+      : `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }, 500);
+}
+
+/* ═══════════════════════════════════════════════════════
+   SCHEDULE NEXT ALARM
+   Posts to SW for true background support; also keeps a
+   local setTimeout as fallback when app is in foreground.
+   ═══════════════════════════════════════════════════════ */
+function scheduleNext(snoozeSec = 0) {
+  clearTimeout(state.timer);
+
+  let delayMs;
+  if (snoozeSec > 0) {
+    delayMs = snoozeSec * 1000;
+  } else {
+    const unit    = parseInt(document.getElementById('interval-unit').value);
+    const minSec  = parseFloat(document.getElementById('min-interval').value) * unit;
+    const maxSec  = parseFloat(document.getElementById('max-interval').value) * unit;
+    const randSec = minSec + Math.random() * (maxSec - minSec);
+    delayMs = randSec * 1000;
+  }
+
+  state.nextFireAt = Date.now() + delayMs;
+  startCountdown();
+
+  /* Tell SW to schedule a real background alarm */
+  const book   = document.getElementById('book-title').value.trim() || 'your book';
+  const page   = parseInt(document.getElementById('current-page').value) || 1;
+  const total  = parseInt(document.getElementById('total-pages').value) || 300;
+  const pct    = Math.min(100, Math.round((page / total) * 100));
+
+  if (state.swReady && navigator.serviceWorker.controller) {
+    navigator.serviceWorker.controller.postMessage({
+      type: 'SCHEDULE_ALARM', delayMs, book, page, total, pct,
+    });
+  }
+
+  /* Fallback: in-page timer (works when tab is active / app is open) */
+  state.timer = setTimeout(fireReminder, delayMs);
+}
+
+function cancelAlarm() {
+  clearTimeout(state.timer);
+  clearInterval(state.countdownInterval);
+  if (state.swReady && navigator.serviceWorker.controller) {
+    navigator.serviceWorker.controller.postMessage({ type: 'CANCEL_ALARM' });
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   VISIBILITY CHANGE — reschedule if timer drifted
+   (Important on mobile when screen turns off)
+   ═══════════════════════════════════════════════════════ */
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && state.running) {
+    const remaining = state.nextFireAt - Date.now();
+    if (remaining <= 0) {
+      /* We missed the reminder while backgrounded — fire now */
+      fireReminder();
+    } else {
+      /* Resync local timer */
+      clearTimeout(state.timer);
+      state.timer = setTimeout(fireReminder, remaining);
+    }
+  }
+});
+
+/* ═══════════════════════════════════════════════════════
+   FIRE REMINDER
+   ═══════════════════════════════════════════════════════ */
+function fireReminder() {
+  if (!state.running) return;
+
+  const book   = document.getElementById('book-title').value.trim() || 'your book';
+  const author = document.getElementById('book-author').value.trim();
+  const cur    = parseInt(document.getElementById('current-page').value) || 1;
+  const total  = parseInt(document.getElementById('total-pages').value) || 300;
+  const pct    = Math.min(100, Math.round((cur / total) * 100));
+
+  /* Update distraction messaging */
+  const selectedApps = Array.from(document.querySelectorAll('.distract-app:checked')).map(el => el.value);
+  let isDistractedMessage = false;
+  let notifBody = `Continue "${book}" — you're on page ${cur} of ${total}`;
+  let historyText = `Reminded to read "${book}" — page ${cur}`;
+
+  if (selectedApps.length > 0 && Math.random() > 0.3) {
+    isDistractedMessage = true;
+    const randApp = selectedApps[Math.floor(Math.random() * selectedApps.length)];
+    document.getElementById('popup-title').textContent = `Time limit reached on ${randApp}!`;
+    document.getElementById('popup-eyebrow').textContent = "Disconnect & Read ✦";
+    notifBody = `You've been distracted by ${randApp}. Time to dive back into "${book}"!`;
+    historyText = `Distraction warning (${randApp}) — diverted to reading.`;
+  } else {
+    document.getElementById('popup-title').textContent = "Continue where you left off!";
+    document.getElementById('popup-eyebrow').textContent = "Time to Read ✦";
+  }
+
+  /* Update & show in-page popup */
+  document.getElementById('popup-book-name').textContent = author ? `${book} · ${author}` : book;
+  document.getElementById('popup-page').textContent      = `Page ${cur} of ${total} · ${pct}% complete`;
+  document.getElementById('popup-bar').style.width       = pct + '%';
+  
+  /* Show book preview if available */
+  const previewArea = document.getElementById('popup-preview-area');
+  if (state.bookPreview) {
+    const vol = state.bookPreview;
+    previewArea.style.display = 'flex';
+    document.getElementById('popup-preview-img').src = vol.imageLinks?.thumbnail || vol.imageLinks?.smallThumbnail || './icons/icon-192.png';
+    const rawDesc = vol.description || "No preview description available.";
+    const cleanDesc = rawDesc.replace(/<[^>]*>?/gm, ''); // primitive HTML strip
+    document.getElementById('popup-preview-desc').textContent = cleanDesc.substring(0, 150) + (cleanDesc.length > 150 ? '...' : '');
+  } else {
+    previewArea.style.display = 'none';
+  }
+
+  document.getElementById('popup-overlay').classList.add('visible');
+
+  /* Vibrate (mobile) */
+  if ('vibrate' in navigator) navigator.vibrate([200, 100, 200]);
+
+  /* Sound */
+  if (document.getElementById('sound-toggle').checked) playChime();
+
+  /* Native notification (if SW not handling it) */
+  if (
+    document.getElementById('notif-toggle').checked &&
+    Notification.permission === 'granted' &&
+    document.visibilityState !== 'hidden'
+  ) {
+    new Notification(isDistractedMessage ? '🛑 Distraction Alert!' : '📖 Time to Read!', {
+      body: notifBody,
+      icon: './icons/icon-192.png',
+      badge: './icons/icon-96.png',
+      tag:  'pageturn-reminder',
+      renotify: true,
+      silent: false,
+    });
+  }
+
+  /* History */
+  addHistory(historyText);
+
+  /* Schedule the next one */
+  scheduleNext();
+}
+
+/* ═══════════════════════════════════════════════════════
+   POPUP ACTIONS
+   ═══════════════════════════════════════════════════════ */
+document.getElementById('popup-start-btn').addEventListener('click', () => {
+  closePopup();
+  showToast('📚', 'Happy reading! See you next reminder.');
+  savePrefs();
+});
+
+document.getElementById('popup-snooze-btn').addEventListener('click', doSnooze);
+document.getElementById('popup-close-btn').addEventListener('click', closePopup);
+document.getElementById('popup-overlay').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('popup-overlay')) closePopup();
+});
+
+function doSnooze() {
+  closePopup();
+  if (!state.running) return;
+  cancelAlarm();
+  scheduleNext(15 * 60);
+  showToast('💤', 'Snoozed for 15 minutes.');
+  addHistory('Reminder snoozed for 15 minutes.');
+}
+
+function closePopup() {
+  document.getElementById('popup-overlay').classList.remove('visible');
+}
+
+/* ═══════════════════════════════════════════════════════
+   START / STOP
+   ═══════════════════════════════════════════════════════ */
+document.getElementById('start-btn').addEventListener('click', async () => {
+  const book = document.getElementById('book-title').value.trim();
+  if (!book) { showToast('⚠️', 'Please enter a book title first!'); return; }
+  savePrefs();
+
+  /* Auto-request notification permission when starting */
+  if (Notification.permission === 'default') {
+    const res = await Notification.requestPermission();
+    if (res === 'granted') {
+      document.getElementById('notif-toggle').checked = true;
+      permBar.classList.remove('show');
+    }
+  }
+
+  /* Fetch initial preview if available */
+  if (!state.bookPreview) fetchBookPreview();
+
+  state.running = true;
+  scheduleNext();
+  setStatus(true);
+  showToast('✅', 'Reminders started! Enjoy your reading.');
+});
+
+document.getElementById('stop-btn').addEventListener('click', () => {
+  state.running = false;
+  cancelAlarm();
+  document.getElementById('countdown-block').style.display = 'none';
+  setStatus(false);
+  showToast('⏹', 'Reminders stopped.');
+});
+
+document.getElementById('test-btn').addEventListener('click', () => {
+  const book = document.getElementById('book-title').value.trim();
+  if (!book) { showToast('⚠️', 'Enter a book title to test!'); return; }
+  const wasRunning = state.running;
+  state.running = true; // temporarily so fireReminder runs
+  savePrefs();
+  clearTimeout(state.timer);  // don't schedule next after test
+  const book2   = book;
+  const author  = document.getElementById('book-author').value.trim();
+  const cur     = parseInt(document.getElementById('current-page').value) || 1;
+  const total   = parseInt(document.getElementById('total-pages').value) || 300;
+  const pct     = Math.min(100, Math.round((cur / total) * 100));
+  
+  const selectedApps = Array.from(document.querySelectorAll('.distract-app:checked')).map(el => el.value);
+  if (selectedApps.length > 0) {
+    const randApp = selectedApps[Math.floor(Math.random() * selectedApps.length)];
+    document.getElementById('popup-title').textContent = `Time limit reached on ${randApp}!`;
+    document.getElementById('popup-eyebrow').textContent = "Disconnect & Read ✦";
+  } else {
+    document.getElementById('popup-title').textContent = "Continue where you left off!";
+    document.getElementById('popup-eyebrow').textContent = "Time to Read ✦";
+  }
+
+  document.getElementById('popup-book-name').textContent = author ? `${book2} · ${author}` : book2;
+  document.getElementById('popup-page').textContent      = `Page ${cur} of ${total} · ${pct}% complete`;
+  document.getElementById('popup-bar').style.width       = pct + '%';
+  
+  const previewArea = document.getElementById('popup-preview-area');
+  if (state.bookPreview) {
+    const vol = state.bookPreview;
+    previewArea.style.display = 'flex';
+    document.getElementById('popup-preview-img').src = vol.imageLinks?.thumbnail || vol.imageLinks?.smallThumbnail || './icons/icon-192.png';
+    const rawDesc = vol.description || "No preview description available.";
+    const cleanDesc = rawDesc.replace(/<[^>]*>?/gm, '');
+    document.getElementById('popup-preview-desc').textContent = cleanDesc.substring(0, 150) + (cleanDesc.length > 150 ? '...' : '');
+  } else {
+    previewArea.style.display = 'none';
+  }
+  
+  document.getElementById('popup-overlay').classList.add('visible');
+  if ('vibrate' in navigator) navigator.vibrate([200, 100, 200]);
+  if (document.getElementById('sound-toggle').checked) playChime();
+  addHistory(`Test popup — "${book2}" page ${cur}`);
+  state.running = wasRunning;
+});
+
+function setStatus(active) {
+  const pill  = document.getElementById('status-pill');
+  const start = document.getElementById('start-btn');
+  const stop  = document.getElementById('stop-btn');
+  if (active) {
+    pill.className = 'status-pill active';
+    pill.innerHTML = '<span class="dot pulse"></span> Active';
+    start.style.display = 'none';
+    stop.style.display  = '';
+  } else {
+    pill.className = 'status-pill inactive';
+    pill.innerHTML = '<span class="dot"></span> Inactive';
+    start.style.display = '';
+    stop.style.display  = 'none';
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   HISTORY
+   ═══════════════════════════════════════════════════════ */
+function addHistory(text) {
+  const now     = new Date();
+  const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  state.history.unshift({ text, time: timeStr });
+  if (state.history.length > 30) state.history.splice(30);
+  localStorage.setItem('pt_history', JSON.stringify(state.history));
+  renderHistory();
+}
+
+function renderHistory() {
+  const ul = document.getElementById('history-list');
+  if (!state.history.length) {
+    ul.innerHTML = '<li class="empty-state"><span>📭</span>No reminders yet — start your reading session!</li>';
+    return;
+  }
+  ul.innerHTML = state.history.map(h => `
+    <li class="history-item">
+      <span class="hi-icon">📖</span>
+      <span class="hi-text">${h.text}</span>
+      <span class="hi-time">${h.time}</span>
+    </li>
+  `).join('');
+}
+
+document.getElementById('clear-history-btn').addEventListener('click', () => {
+  state.history = [];
+  localStorage.removeItem('pt_history');
+  renderHistory();
+  showToast('🗑️', 'History cleared.');
+});
+
+/* ═══════════════════════════════════════════════════════
+   TOAST
+   ═══════════════════════════════════════════════════════ */
+let toastTimeout;
+function showToast(icon, text) {
+  const bar = document.getElementById('notif-bar');
+  document.getElementById('notif-icon').textContent = icon;
+  document.getElementById('notif-text').textContent = text;
+  bar.classList.add('show');
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => bar.classList.remove('show'), 3200);
+}
+
+/* ═══════════════════════════════════════════════════════
+   SOUND
+   ═══════════════════════════════════════════════════════ */
+function playChime() {
+  try {
+    const ctx   = new (window.AudioContext || window.webkitAudioContext)();
+    const notes = [523.25, 659.25, 783.99]; // C5-E5-G5
+    notes.forEach((freq, i) => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sine'; osc.frequency.value = freq;
+      const t = ctx.currentTime + i * 0.18;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.18, t + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
+      osc.start(t); osc.stop(t + 0.6);
+    });
+  } catch(e) { /* audio not available */ }
+}
+
+/* ═══════════════════════════════════════════════════════
+   AUTO-SAVE & LISTENERS
+   ═══════════════════════════════════════════════════════ */
+['book-title','book-author','current-page','total-pages',
+ 'min-interval','max-interval','interval-unit','sound-toggle'].forEach(id => {
+  document.getElementById(id).addEventListener('change', savePrefs);
+});
+document.querySelectorAll('.distract-app').forEach(el => {
+  el.addEventListener('change', savePrefs);
+});
+
+/* ═══════════════════════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════
+   ORDER NOTIFICATION SUBSCRIPTION
+   ═══════════════════════════════════════════════════════ */
+const VAPID_PUBLIC_KEY = 'BJasYuKYmIDE2Jzq4xJ-rPWSWg9P84bVAFqpmHYIlErzB5fV7IBJpwcOc43NekbnUEgK_w5V5F0vayUMBBjD71s';
+const SERVER_URL = 'http://localhost:3000'; // REPLACE THIS with your Render URL after deployment
+
+async function subscribeToOrders() {
+  if (!state.swReady || !state.swReg) return;
+  
+  try {
+    const subscription = await state.swReg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+    
+    const response = await fetch(`${SERVER_URL}/subscribe`, {
+      method: 'POST',
+      body: JSON.stringify(subscription),
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    if (response.ok) {
+      showToast('🛍️', 'Order alerts linked to this device!');
+      document.getElementById('order-api-info').style.display = 'block';
+    }
+  } catch (err) {
+    console.error('Subscription failed:', err);
+    showToast('❌', 'Failed to link order alerts.');
+    document.getElementById('order-notif-toggle').checked = false;
+  }
+}
+
+async function unsubscribeFromOrders() {
+  if (!state.swReg) return;
+  const sub = await state.swReg.pushManager.getSubscription();
+  if (sub) {
+    await sub.unsubscribe();
+    document.getElementById('order-api-info').style.display = 'none';
+    showToast('🔕', 'Order alerts disabled.');
+  }
+}
+
+document.getElementById('order-notif-toggle').addEventListener('change', (e) => {
+  if (e.target.checked) subscribeToOrders();
+  else unsubscribeFromOrders();
+});
+
+function copyApiUrl() {
+  const el = document.getElementById('order-api-url');
+  el.select();
+  document.execCommand('copy');
+  showToast('📋', 'API URL copied to clipboard!');
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+loadPrefs();
+if (document.getElementById('book-title').value.trim()) {
+  fetchBookPreview();
+}
+loadQuote();
+renderHistory();
+checkNotifPermission();
+
+// Check if already subscribed to orders
+if (state.swReady) {
+  state.swReg.pushManager.getSubscription().then(sub => {
+    if (sub) {
+      document.getElementById('order-notif-toggle').checked = true;
+      document.getElementById('order-api-info').style.display = 'block';
+    }
+  });
+}
+</script>
+</body>
+</html>
