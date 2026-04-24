@@ -53,11 +53,15 @@ app.post('/subscribe', (req, res) => {
 // Usage: POST /trigger-order-alert
 // Body: { "orderId": "12345", "customerName": "John Doe", "amount": "$99.99" }
 app.post('/trigger-order-alert', (req, res) => {
-    const { orderId, customerName, amount } = req.body;
+    const { orderId, customerName, customer, amount, total, phone, address } = req.body;
     
+    // Support both your previous fields and your new payload fields
+    const name = customerName || customer || 'Customer';
+    const price = amount || (total ? `$${total}` : 'Price N/A');
+
     const notificationPayload = JSON.stringify({
         title: '📦 New Order Taken!',
-        body: `Order #${orderId || 'N/A'} for ${customerName || 'Customer'} - ${amount || 'Price N/A'}`,
+        body: `Order #${orderId || 'N/A'} - ${name}\n💰 ${price}\n📞 ${phone || 'No phone'}\n📍 ${address || 'No address'}`,
         icon: '/icons/icon-192.png',
         badge: '/icons/icon-96.png',
         data: {
@@ -69,7 +73,6 @@ app.post('/trigger-order-alert', (req, res) => {
         webpush.sendNotification(sub, notificationPayload).catch(error => {
             console.error('Error sending notification to endpoint:', sub.endpoint, error);
             if (error.statusCode === 404 || error.statusCode === 410) {
-                // Subscription has expired or is no longer valid
                 return 'REMOVE';
             }
         })
